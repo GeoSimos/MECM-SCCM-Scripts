@@ -13,7 +13,10 @@
       15/09/2021 Version 1.1
       User profiles are unloaded at logoff, changed the way we handle both cases (logged on/off user)
       20/09/2021 Version 1.2
-      Moved the logged on Users option to an "Else" block. 
+      Moved the logged on Users option to an "Else" block.
+      04/03/20221 Version 1.3
+      Replaced hardcoded NB Domain with a variable.
+      Added Sleep timers after Garbage Collection and registry unload to avoid potential profile corruptions.
     #>
 
 # Setup the HKEY_USERS PSDrive for the registry manipulation.
@@ -45,8 +48,10 @@ If (!(Test-Path $RegLastLoggedonUserRunOnce)) {
    # Garbage collection to allow the unloading of the User's registry hive file.
    [gc]::Collect()
    [gc]::WaitForPendingFinalizers()
+   Start-Sleep -Seconds 5
    # Unload the last logged on User's registry ghive from Registry.
    Reg unload "HKU\$($RegLastLoggeonUserValue.LastLoggedOnUserSID)"
+   Start-Sleep -Seconds 5
 }
 Else {
    # Set the RunOnce action for the last logged on user when the user's profile is already loaded (User logged).
