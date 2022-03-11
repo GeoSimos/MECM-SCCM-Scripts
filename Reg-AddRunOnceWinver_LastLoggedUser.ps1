@@ -49,7 +49,7 @@ If (!(Test-Path $RegLastLoggedonUserRunOnce)) {
    [gc]::Collect()
    [gc]::WaitForPendingFinalizers()
    Start-Sleep -Seconds 5
-   # Unload the last logged on User's registry ghive from Registry.
+   # Unload the last logged on User's registry hive from Registry.
    Reg unload "HKU\$($RegLastLoggeonUserValue.LastLoggedOnUserSID)"
    Start-Sleep -Seconds 5
 }
