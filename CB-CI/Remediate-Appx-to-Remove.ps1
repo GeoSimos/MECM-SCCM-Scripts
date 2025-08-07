@@ -19,7 +19,10 @@
 # Remediate-Appx-to-Remove.ps1
 # Removes AppxPackages listed in a CSV file (from check-appx-to-remove.ps1)
 $ErrorActionPreference = 'Stop'
-$csvPath = "C:\Path\To\appx-to-remove.csv" # Update this path as needed
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$csvPath
+)
 
 if (-not (Test-Path $csvPath)) {
     Write-Output "CSV file not found: $csvPath"
