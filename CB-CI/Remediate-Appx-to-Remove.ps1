@@ -11,43 +11,79 @@
 
 .NOTES
     Author: George Simos <George_Simos@hotmail.com>
-    Date: 20-6-2025
-    Last Modified: 20-6-2025
-    Version: 1.0
+    Date: 20-06-2025
+    Last Modified: 13-08-2025
+    Version: 1.1
+    -Added CMTrace logging functionality and implemented logging for each AppxPackage removal and errors.
+    -Added default value for CSV Parameter as it can't be passed in a ConfigMgr Configuration Baseline Item. 
 #>
 
 # Remediate-Appx-to-Remove.ps1
 # Removes AppxPackages listed in a CSV file (from check-appx-to-remove.ps1)
 $ErrorActionPreference = 'Stop'
+
+# Functions definition block
+
+# Function to write logs in CMTrace format
+function Write-CMTraceLog {
+    param (
+        [string]$Message,
+        [string]$Component = "AppxRemoval",
+        [ValidateSet("Info", "Warning", "Error")]
+        [string]$Severity = "Info",
+        [string]$LogPath = "$env:Windir\Logs\Windows-AppxRemoval.log"
+    )
+
+    $timestamp = Get-Date -Format "dd-mm-yyyy HH:mm:ss.fff"
+    $threadId = [System.Diagnostics.Process]::GetCurrentProcess().Id
+    $entry = "$timestamp $threadId $Component $Severity $Message"
+    Add-Content -Path $LogPath -Value $entry
+}
+
+# Parameters definition block
+$csvDefaultFile = ".\Appx_List_for_removal.csv"
 param(
     [Parameter(Mandatory = $true)]
-    [string]$csvPath
+    [string]$csvPath = $csvDefaultFile
 )
 
 if (-not (Test-Path $csvPath)) {
     Write-Output "CSV file not found: $csvPath"
+    Write-CMTraceLog -Message "CSV file not found: $csvPath" -Severity "Error"
     exit 1
 }
 
-$AppxPackagesToRemove = Import-Csv $csvPath | Select-Object -ExpandProperty PackageName
+$AppxPackagesToRemove = Import-Csv -Path $csvPath 
 $errors = @()
 
-foreach ($Package in $AppxPackagesToRemove) {
+foreach ($AppxPackage in $AppxPackagesToRemove) {
     try {
+        # Log the start of the removal process for the current package
+        Write-CMTraceLog -Message "Starting removal for AppxPackage: $($AppxPackage.AppxName)" -Severity "Info"
+
         # Remove for all users
-        Get-AppxPackage -Name $Package -AllUsers | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
+        Get-AppxPackage -Name $AppxPackage.AppxName -AllUsers | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue #-WhatIf
+        Write-CMTraceLog -Message "Removed AppxPackage for all users: $($AppxPackage.AppxName)" -Severity "Info"
 
         # Remove provisioned package
-        Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ $Package | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
-    } catch {
-        $errors += "Failed to remove $($Package): $($_)"
+        Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ $AppxPackage.AppxName | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue -WhatIf
+        Write-CMTraceLog -Message "Removed provisioned AppxPackage: $($AppxPackage.AppxName)" -Severity "Info"
+    }
+    catch {
+        # Log the error if removal fails
+        $errorMessage = "Failed to remove $($AppxPackage.AppxName): $($_.Exception.Message)"
+        Write-CMTraceLog -Message $errorMessage -Severity "Error"
+        $errors += $errorMessage
     }
 }
 
 if ($errors.Count -eq 0) {
     Write-Output "Specified AppxPackages have been removed if present."
+    Write-CMTraceLog -Message "All specified AppxPackages have been successfully removed." -Severity "Info"
     exit 0
-} else {
-    Write-Output "Some packages could not be removed:`n$($errors -join "`n")"
+}
+else {
+    Write-Output "Errors occurred during removal. Check the log for details."
+    Write-CMTraceLog -Message "Errors occurred during removal. Details: $($errors -join '; ')" -Severity "Error"
     exit 1
 }
