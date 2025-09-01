@@ -19,6 +19,9 @@ Modified: 13-08-2025
 -Added CMTrace logging functionality and implemented logging for each AppxPackage removal and errors.
 -Added default value for CSV Parameter as it can't be passed in a ConfigMgr Configuration Baseline Item.
 -Removed exit commands as they are not suitable for use in a ConfigMgr configuration baseline compliance script.
+-Replaced CSV import with an internal list of Appx packages to remove. ConfigMgr Configuration Baselines do not support accompanying files with scripts in CI-CBs.
+Modified: 01-09-2025
+-Added Microsoft Teams Personal for Windows 11.
 
 # To generate a list of installed Appx applications and export to CSV, run:
 # Get-AppxPackage | Select-Object -ExpandProperty Name | Sort-Object | Export-Csv -Path "C:\Scripts\AppxList.csv" -NoTypeInformation
@@ -38,7 +41,7 @@ Microsoft.SkypeApp
 function Write-CMTraceLog {
     param (
         [string]$Message,
-        [string]$Component = "AppxRemoval",
+        [string]$Component = "AppxDetection",
         [ValidateSet("Info", "Warning", "Error")]
         [string]$Severity = "Info",
         [string]$LogPath = "$env:Windir\Logs\Windows-AppxRemoval.log"
@@ -50,44 +53,71 @@ function Write-CMTraceLog {
     Add-Content -Path $LogPath -Value $entry
 }
 
-# Parameters definition block
-$csvDefaultFile = ".\Appx_List_for_removal.csv"
-param (
-    [Parameter(Mandatory = $true)]
-    [string]$csvPath = $csvDefaultFile
-)
+# Internal list of Appx packages to remove
+$AppxPackagesToRemove = @(
+    @{ AppxName = "Clipchamp.Clipchamp" },
+    @{ AppxName = "Microsoft.549981C3F5F10" },
+    @{ AppxName = "Microsoft.Copilot" },
+    @{ AppxName = "Microsoft.GamingApp" },
+    @{ AppxName = "Microsoft.GetHelp" },
+    @{ AppxName = "Microsoft.Getstarted" },
+    @{ AppxName = "Microsoft.MicrosoftOfficeHub" },
+    @{ AppxName = "Microsoft.MicrosoftSolitaireCollection" },
+    @{ AppxName = "Microsoft.MicrosoftStickyNotes" },
+    @{ AppxName = "Microsoft.MSPaint" },
+    @{ AppxName = "Microsoft.OutlookForWindows" },
+    @{ AppxName = "Microsoft.People" },
+    @{ AppxName = "Microsoft.StorePurchaseApp" },
+    @{ AppxName = "MicrosoftTeams" },
+    @{ AppxName = "Microsoft.windowscommunicationsapps" },
+    @{ AppxName = "Microsoft.WindowsFeedbackHub" },
+    @{ AppxName = "Microsoft.Xbox.TCUI" },
+    @{ AppxName = "Microsoft.XboxGameOverlay" },
+    @{ AppxName = "Microsoft.XboxGamingOverlay" },
+    @{ AppxName = "Microsoft.XboxIdentityProvider" },
+    @{ AppxName = "Microsoft.XboxSpeechToTextOverlay" },
+    @{ AppxName = "Microsoft.YourPhone" },
+    @{ AppxName = "Microsoft.ZuneVideo" }
+) 
 
-# Import the list of Appx names from the CSV
+# Parameters definition block
+# $csvPath = ".\AppxList.csv"
+# param (
+#     [Parameter(Mandatory = $true)]
+#     [string]$csvPath = $csvDefaultFile
+# )
+
+<# # Import the list of Appx names from the CSV
 try {
-    Write-CMTraceLog -Message "Attempting to import CSV file from path: $CsvPath" -Severity "Info"
-    $appxList = Import-Csv -Path $CsvPath
-    Write-CMTraceLog -Message "Successfully imported CSV file from path: $CsvPath" -Severity "Info"
+    Write-CMTraceLog -Message "Attempting to import CSV file from path: $csvPath" -Severity "Info"
+    $appxList = Import-Csv -Path $csvPath
+    Write-CMTraceLog -Message "Successfully imported CSV file from path: $csvPath" -Severity "Info"
 }
 catch {
-    Write-CMTraceLog -Message "Failed to import CSV file at path: $CsvPath. Error: $($_.Exception.Message)" -Severity "Error"
-    Write-Output "NonCompliant: Failed to import CSV file at path: $CsvPath"
+    Write-CMTraceLog -Message "Failed to import CSV file at path: $csvPath. Error: $($_.Exception.Message)" -Severity "Error"
+    Write-Output "NonCompliant: Failed to import CSV file at path: $csvPath"
     return
-}
+} #>
 
-# Validate the CSV content
+<# # Validate the CSV content
 if (-not $appxList -or -not $appxList.AppxName) {
     Write-CMTraceLog -Message "CSV file validation failed. The file must contain a column named 'AppxName' with at least one entry." -Severity "Error"
     Write-Output "NonCompliant: CSV file must contain a column named 'AppxName' with at least one entry."
     return
-}
+} #>
 
-Write-CMTraceLog -Message "CSV file validation passed. Proceeding with Appx package checks." -Severity "Info"
+# Write-CMTraceLog -Message "CSV file validation passed. Proceeding with Appx package checks." -Severity "Info"
 # Track compliance
 $nonCompliantApps = @()
 
-foreach ($app in $appxList) {
+foreach ($app in $AppxPackagesToRemove) {
     $appName = $app.AppxName
     if ([string]::IsNullOrWhiteSpace($appName)) { 
-        Write-CMTraceLog -Message "Skipping empty or invalid AppxName entry in CSV." -Severity "Warning"
+        Write-CMTraceLog -Message "Skipping empty or invalid AppxName entry in list." -Severity "Warning"
         continue 
     }
     # Check if the Appx package is installed
-    $found = Get-AppxPackage -Name $appName -ErrorAction SilentlyContinue
+    $found = Get-AppxPackage -Name $appName -AllUsers -ErrorAction SilentlyContinue
     if ($found) {
         Write-CMTraceLog -Message "AppxPackage found: $appName" -Severity "Info"
         $nonCompliantApps += $appName

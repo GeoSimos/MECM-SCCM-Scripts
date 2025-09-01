@@ -15,7 +15,12 @@
     Last Modified: 13-08-2025
     Version: 1.1
     -Added CMTrace logging functionality and implemented logging for each AppxPackage removal and errors.
-    -Added default value for CSV Parameter as it can't be passed in a ConfigMgr Configuration Baseline Item. 
+    -Added default value for CSV Parameter as it can't be passed in a ConfigMgr Configuration Baseline Item.
+    -Removed exit commands as they are not suitable for use in a ConfigMgr configuration baseline compliance script.
+    -Added removal only when the Appx package is installed for all users or provisioned. 
+    That is, it will not attempt to remove Appx packages regardless.
+    Modified: 01-09-2025
+    -Added Microsoft Teams Personal for Windows 11.
 #>
 
 # Remediate-Appx-to-Remove.ps1
@@ -41,19 +46,47 @@ function Write-CMTraceLog {
 }
 
 # Parameters definition block
-$csvDefaultFile = ".\Appx_List_for_removal.csv"
-param(
-    [Parameter(Mandatory = $true)]
-    [string]$csvPath = $csvDefaultFile
-)
+#$csvPath = ".\AppxList.csv"
+# param(
+#     [Parameter(Mandatory = $true)]
+#     [string]$csvPath = $csvDefaultFile
+# )
 
+# Internal list of Appx packages to remove
+$AppxPackagesToRemove = @(
+    @{ AppxName = "Clipchamp.Clipchamp" },
+    @{ AppxName = "Microsoft.549981C3F5F10" },
+    @{ AppxName = "Microsoft.Copilot" },
+    @{ AppxName = "Microsoft.GamingApp" },
+    @{ AppxName = "Microsoft.GetHelp" },
+    @{ AppxName = "Microsoft.Getstarted" },
+    @{ AppxName = "Microsoft.MicrosoftOfficeHub" },
+    @{ AppxName = "Microsoft.MicrosoftSolitaireCollection" },
+    @{ AppxName = "Microsoft.MicrosoftStickyNotes" },
+    @{ AppxName = "Microsoft.MSPaint" },
+    @{ AppxName = "Microsoft.OutlookForWindows" },
+    @{ AppxName = "Microsoft.People" },
+    @{ AppxName = "Microsoft.StorePurchaseApp" },
+    @{ AppxName = "MicrosoftTeams" },
+    @{ AppxName = "Microsoft.windowscommunicationsapps" },
+    @{ AppxName = "Microsoft.WindowsFeedbackHub" },
+    @{ AppxName = "Microsoft.Xbox.TCUI" },
+    @{ AppxName = "Microsoft.XboxGameOverlay" },
+    @{ AppxName = "Microsoft.XboxGamingOverlay" },
+    @{ AppxName = "Microsoft.XboxIdentityProvider" },
+    @{ AppxName = "Microsoft.XboxSpeechToTextOverlay" },
+    @{ AppxName = "Microsoft.YourPhone" },
+    @{ AppxName = "Microsoft.ZuneVideo" }
+) 
+
+<# # Check if the CSV file exists
 if (-not (Test-Path $csvPath)) {
-    Write-Output "CSV file not found: $csvPath"
     Write-CMTraceLog -Message "CSV file not found: $csvPath" -Severity "Error"
-    exit 1
+    Write-Output "NonCompliant: CSV file not found: $csvPath"
+    return
 }
 
-$AppxPackagesToRemove = Import-Csv -Path $csvPath 
+$AppxPackagesToRemove = Import-Csv -Path $csvPath  #>
 $errors = @()
 
 foreach ($AppxPackage in $AppxPackagesToRemove) {
@@ -61,13 +94,28 @@ foreach ($AppxPackage in $AppxPackagesToRemove) {
         # Log the start of the removal process for the current package
         Write-CMTraceLog -Message "Starting removal for AppxPackage: $($AppxPackage.AppxName)" -Severity "Info"
 
-        # Remove for all users
-        Get-AppxPackage -Name $AppxPackage.AppxName -AllUsers | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue #-WhatIf
-        Write-CMTraceLog -Message "Removed AppxPackage for all users: $($AppxPackage.AppxName)" -Severity "Info"
+        # Check if the Appx package is installed for any user
+        $found = Get-AppxPackage -Name $AppxPackage.AppxName -AllUsers -ErrorAction SilentlyContinue
+        if ($found) {
+            # Remove for all users
+            Get-AppxPackage -Name $AppxPackage.AppxName -AllUsers | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue #-WhatIf
+            Write-CMTraceLog -Message "Removed AppxPackage for all users: $($AppxPackage.AppxName)" -Severity "Info"
+        }
+        else {
+            Write-CMTraceLog -Message "AppxPackage not found for any user: $($AppxPackage.AppxName)" -Severity "Warning"
+            continue
+        }
 
-        # Remove provisioned package
-        Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ $AppxPackage.AppxName | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue -WhatIf
-        Write-CMTraceLog -Message "Removed provisioned AppxPackage: $($AppxPackage.AppxName)" -Severity "Info"
+        # Check if the provisioned package exists
+        $provisioned = Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ $AppxPackage.AppxName
+        if ($provisioned) {
+            # Remove provisioned package
+            Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ $AppxPackage.AppxName | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue #-WhatIf
+            Write-CMTraceLog -Message "Removed provisioned AppxPackage: $($AppxPackage.AppxName)" -Severity "Info"
+        }
+        else {
+            Write-CMTraceLog -Message "Provisioned AppxPackage not found: $($AppxPackage.AppxName)" -Severity "Warning"
+        }
     }
     catch {
         # Log the error if removal fails
@@ -77,13 +125,12 @@ foreach ($AppxPackage in $AppxPackagesToRemove) {
     }
 }
 
+# Output compliance results
 if ($errors.Count -eq 0) {
-    Write-Output "Specified AppxPackages have been removed if present."
     Write-CMTraceLog -Message "All specified AppxPackages have been successfully removed." -Severity "Info"
-    exit 0
+    Write-Output "Compliant"
 }
 else {
-    Write-Output "Errors occurred during removal. Check the log for details."
     Write-CMTraceLog -Message "Errors occurred during removal. Details: $($errors -join '; ')" -Severity "Error"
-    exit 1
+    Write-Output "NonCompliant: Errors occurred during removal. Check the log for details."
 }
