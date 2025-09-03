@@ -21,6 +21,8 @@
     That is, it will not attempt to remove Appx packages regardless.
     Modified: 01-09-2025
     -Added Microsoft Teams Personal for Windows 11.
+    Modified: 03-09-2025
+    -Fixed wrong month format in CMTrace logging function.
 #>
 
 # Remediate-Appx-to-Remove.ps1
@@ -39,7 +41,7 @@ function Write-CMTraceLog {
         [string]$LogPath = "$env:Windir\Logs\Windows-AppxRemoval.log"
     )
 
-    $timestamp = Get-Date -Format "dd-mm-yyyy HH:mm:ss.fff"
+    $timestamp = Get-Date -Format "dd-MM-yyyy HH:mm:ss.fff"
     $threadId = [System.Diagnostics.Process]::GetCurrentProcess().Id
     $entry = "$timestamp $threadId $Component $Severity $Message"
     Add-Content -Path $LogPath -Value $entry

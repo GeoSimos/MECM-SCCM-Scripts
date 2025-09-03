@@ -22,6 +22,8 @@ Modified: 13-08-2025
 -Replaced CSV import with an internal list of Appx packages to remove. ConfigMgr Configuration Baselines do not support accompanying files with scripts in CI-CBs.
 Modified: 01-09-2025
 -Added Microsoft Teams Personal for Windows 11.
+Modified: 03-09-2025
+-Fixed wrong month format in CMTrace logging function.
 
 # To generate a list of installed Appx applications and export to CSV, run:
 # Get-AppxPackage | Select-Object -ExpandProperty Name | Sort-Object | Export-Csv -Path "C:\Scripts\AppxList.csv" -NoTypeInformation
@@ -47,7 +49,7 @@ function Write-CMTraceLog {
         [string]$LogPath = "$env:Windir\Logs\Windows-AppxRemoval.log"
     )
 
-    $timestamp = Get-Date -Format "dd-mm-yyyy HH:mm:ss.fff"
+    $timestamp = Get-Date -Format "dd-MM-yyyy HH:mm:ss.fff"
     $threadId = [System.Diagnostics.Process]::GetCurrentProcess().Id
     $entry = "$timestamp $threadId $Component $Severity $Message"
     Add-Content -Path $LogPath -Value $entry
